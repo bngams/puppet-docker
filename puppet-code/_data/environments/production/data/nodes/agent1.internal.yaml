@@ -1,0 +1,13 @@
+hiera_groups: 'webserver'
+
+db::app1:
+  user: 'app1_dbu'
+  password: 'password'
+
+databases:
+  app1:
+    user: 'app1_dbu'
+    password: 'password'
+  app2:
+    user: 'app2_dbu'
+    password: 'password'

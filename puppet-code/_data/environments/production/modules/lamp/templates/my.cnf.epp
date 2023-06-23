@@ -1,0 +1,6 @@
+[client]
+user=root
+<%# in erb templates you can have a global scope like this scope['lamp::params::db_root_password'] %>
+<% if $db_root_password { -%>
+password=<%= $db_root_password %>
+<% } -%>
