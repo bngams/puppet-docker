@@ -1,2 +1,0 @@
-mod 'puppetlabs-mysql', '15.0.0'
-mod 'puppetlabs-apache', '10.1.0'

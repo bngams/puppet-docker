@@ -1,0 +1,129 @@
+# Pile OpenVox (Puppet 8 open source) du cours : serveur, OpenVoxDB (PuppetDB), PostgreSQL,
+# Puppetboard, et deux nœuds gérés (web1, web2) construits depuis agent/Dockerfile.
+#
+#   docker compose up -d            # lance tout
+#   docker compose up -d puppet     # ou seulement le serveur et ce dont il dépend
+#
+# Tous les ports sont publiés sur 127.0.0.1, au-delà de 28100, pour ne pas gêner vos projets.
+name: layers-puppet
+
+services:
+  puppet:
+    image: ghcr.io/openvoxproject/openvoxserver:8.17.0
+    container_name: layers-puppet
+    hostname: puppet
+    environment:
+      OPENVOXSERVER_HOSTNAME: puppet
+      # autosign.conf (écrit par server-init/10-autosign.sh) : seul OpenVoxDB est signé
+      # automatiquement, les nœuds sont signés à la main au chapitre 5
+      AUTOSIGN: /etc/puppetlabs/puppet/autosign.conf
+      # 0 = pas de cache d'environnement, vos modifications de code sont vues au prochain run
+      OPENVOXSERVER_ENVIRONMENT_TIMEOUT: "0"
+      OPENVOXSERVER_JAVA_ARGS: "-Xms512m -Xmx1024m"
+    volumes:
+      - ../atelier:/etc/puppetlabs/code          # votre code Puppet (environments/production/…)
+      - ./server-init:/container-custom-entrypoint.d/pre-default
+      - puppet-ssl:/etc/puppetlabs/puppet/ssl
+      - puppet-ca:/etc/puppetlabs/puppetserver/ca
+    ports:
+      - "127.0.0.1:28140:8140"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ksS https://puppet:8140/status/v1/simple | grep -q '^running$'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: layers-puppet-postgres
+    hostname: postgres
+    environment:
+      POSTGRES_DB: openvoxdb
+      POSTGRES_USER: openvoxdb
+      POSTGRES_PASSWORD: openvoxdb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openvoxdb -d openvoxdb"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  openvoxdb:
+    image: ghcr.io/openvoxproject/openvoxdb:8.15.0
+    container_name: layers-puppet-db
+    hostname: openvoxdb
+    environment:
+      OPENVOXSERVER_HOSTNAME: puppet
+      OPENVOXDB_POSTGRES_HOSTNAME: postgres
+    volumes:
+      - openvoxdb-ssl:/opt/puppetlabs/server/data/puppetdb/certs   # son certificat, signé une seule fois
+    depends_on:
+      puppet:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ksS https://openvoxdb:8081/status/v1/simple | grep -q '^running$'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  puppetboard:
+    image: ghcr.io/voxpupuli/puppetboard:8.1.0
+    container_name: layers-puppet-board
+    hostname: puppetboard
+    environment:
+      PUPPETDB_HOST: openvoxdb
+      PUPPETDB_PORT: "8080"          # port HTTP (sans TLS) d'OpenVoxDB, réservé au réseau interne
+      PUPPETBOARD_PORT: "8088"
+      ENABLE_CATALOG: "true"
+      SECRET_KEY: ${PUPPETBOARD_SECRET_KEY:-layers-puppet-dev-only}
+    depends_on:
+      openvoxdb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:28188:8088"
+
+  web1:
+    build: ./agent
+    image: layers-openvox-agent
+    container_name: layers-puppet-web1
+    hostname: web1
+    cgroup: private                # systemd en PID 1 : voir agent/Dockerfile
+    tmpfs: [/run, /run/lock, /tmp]
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - web1-ssl:/etc/puppetlabs/puppet/ssl
+    ports:
+      - "127.0.0.1:28181:80"
+    depends_on:
+      puppet:
+        condition: service_healthy
+
+  web2:
+    build: ./agent
+    image: layers-openvox-agent
+    container_name: layers-puppet-web2
+    hostname: web2
+    cgroup: private
+    tmpfs: [/run, /run/lock, /tmp]
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - web2-ssl:/etc/puppetlabs/puppet/ssl
+    ports:
+      - "127.0.0.1:28182:80"
+    depends_on:
+      puppet:
+        condition: service_healthy
+
+volumes:
+  puppet-ssl:
+  puppet-ca:
+  postgres-data:
+  openvoxdb-ssl:
+  web1-ssl:
+  web2-ssl:
