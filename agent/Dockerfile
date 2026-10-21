@@ -2,7 +2,7 @@
 #
 # systemd tourne en PID 1 pour que la ressource Puppet `service` se comporte exactement comme
 # sur une vraie machine (ensure => running, enable => true). Le conteneur doit être lancé avec
-# un cgroup en écriture et /run en tmpfs : voir lab/compose.yml et le chapitre 1 du cours.
+# le mode privilégié, un cgroupns privé et /run en tmpfs : voir lab/compose.yml et le chapitre 1.
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive

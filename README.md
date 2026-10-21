@@ -26,10 +26,10 @@ Adaptez le chemin dans `compose.yml` si votre code est ailleurs.
 La ressource Puppet `service` s'appuie sur l'init du système. Avec systemd en PID 1, un
 conteneur se comporte comme une petite VM : `ensure => running`, `enable => true`, `systemctl`
 fonctionnent comme sur un serveur, sans le hack `docker-systemctl-replacement` ni supervisor.
-Il faut pour cela un cgroup en écriture et des tmpfs (`cgroup: private`, `tmpfs: [/run,
-/run/lock, /tmp]`, `/sys/fs/cgroup:/sys/fs/cgroup:rw`), sans mode privilégié. Validé sur
-Docker Desktop (macOS, arm64) ; si systemd ne démarre pas sur votre moteur, ajoutez
-`privileged: true` aux services `web1` et `web2`.
+Il faut pour cela le mode privilégié, un cgroupns privé et des tmpfs (`privileged: true`,
+`cgroup: private`, `tmpfs: [/run, /run/lock, /tmp]`). Validé sur Docker Desktop (macOS,
+arm64) et sur un VPS Linux ; la variante sans mode privilégié (montage de `/sys/fs/cgroup` en
+écriture) ne fonctionne que sur Docker Desktop. À réserver à un lab.
 
 ## Démarrer
 
